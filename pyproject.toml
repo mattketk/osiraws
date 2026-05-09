@@ -1,0 +1,14 @@
+[project]
+name = "osiraws"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "h5py>=3.16.0",
+    "ipykernel>=7.2.0",
+    "tqdm>=4.67.3",
+]
+
+[project.scripts]
+osiraws = "osiraws.main:main"
