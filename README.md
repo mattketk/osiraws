@@ -1,4 +1,4 @@
-# osiraws: OSIRris RAW Sort
+# osiraws: OSIris RAW Sort
 Applet to sort OSIRIS raw diagnostic data (non-overwrite.)
 
 ## Installation
