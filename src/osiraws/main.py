@@ -21,8 +21,7 @@ def copy_tree(src, dst):
         
         copy2(f, target)
 
-def output_dir(args):
-    out_path = args.output
+def output_dir(out_path):
     if out_path is None:
         out_path = os.path.join(args.sim_dir, f'MS/RAW/{args.species}_SORTED')
     if not os.path.isdir(out_path):
@@ -44,16 +43,20 @@ def list_routine(args):
 
 def sort_routine(args):
     orig = os.path.join(args.sim_dir, f'MS/RAW/{args.species}')
-    out = output_dir(args)
+    out = output_dir(args.output)
     sys.stdout.write('Selected species: ' + args.species+'\n')
     sys.stdout.write('Original directory: ' + orig+'\n')
     sys.stdout.write('Target directory: ' + out+'\n')
-    copy_tree(orig, out)
+    if not args.skip_copy:
+        copy_tree(orig, out)
 
     out = Path(out)
     files = [p for p in out.rglob('*.h5') if p.is_file()]
     file_prefix = f'RAW-{args.species}'
     frame_indices = [int(str(f).split('-')[-1].split('.')[0]) for f in sorted(files)]
+    if args.start_at is not None:
+        sys.stdout.write(f'--start_at flag was invoked, starting at frame index {args.start_at}/{len(frame_indices)}' +'\n')
+        frame_indices = frame_indices[args.start_at:]
 
     for i in tqdm(range(len(frame_indices)), desc='[2/2] Sorting raw data'):
         with h5py.File(open_from_index(frame_indices[i], out, file_prefix), 'r+') as f:
@@ -67,6 +70,28 @@ def sort_routine(args):
                     sorted_temp = f[key][:][ind_sorted]
                     
                 f[key][:] = sorted_temp 
+
+def validate(args):
+    out = output_dir(args.raw_dir)
+    out = Path(out)
+    files = sorted([p for p in out.rglob('*.h5') if p.is_file()])
+    frame_indices = [int(str(f).split('-')[-1].split('.')[0]) for f in files]
+    n_raw = len(frame_indices)
+    unsorted = []
+    for i in tqdm(range(n_raw), desc='Validating raw data'):
+        with h5py.File(files[i], 'r') as f:
+            ind_sorted = np.lexsort((f['tag'][:,1], f['tag'][:,0]))
+            increments = np.diff(ind_sorted).astype('int')
+
+            if np.any(increments != 1):
+                unsorted.append(i)
+
+    if len(unsorted) > 0:
+        sys.stdout.write('The following RAW files were found to be unsorted:\n')
+        for i in unsorted:
+            sys.stdout.write(f'{i}/{n_raw} -> {files[i]}\n')
+    else:
+        sys.stdout.write('All files have been sorted!\n')
 
 def main():
     parser = argparse.ArgumentParser(
@@ -94,7 +119,21 @@ def main():
         default=None,
         help='Destination folder of sorted raw data.'
     )
+    sort_parser.add_argument(
+        '--skip_copy',
+        action='store_true',
+        help='Flag over whether to skip copying the raw file tree.'
+    )
+    sort_parser.add_argument(
+        '--start_at',
+        default=None,
+        type=int,
+        help='Flag to specify the # raw file to start at (in case of overtime.)'
+    )
     sort_parser.set_defaults(func=sort_routine)
+    validate_parser = subparser.add_parser('validate')
+    validate_parser.add_argument('raw_dir', help='Path to the RAW directory in question.')
+    validate_parser.set_defaults(func=validate)
 
     args = parser.parse_args()
     args.func(args)
